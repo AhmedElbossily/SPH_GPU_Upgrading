@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.11.3)
 
 project(SPH LANGUAGES CUDA CXX)
+set(CMAKE_CUDA_STANDARD 17)
+
+set(CMAKE_CXX_COMPILER /usr/bin/g++-11)
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.8/bin/nvcc)
 
 # Enable CUDA language
 enable_language(CUDA)
