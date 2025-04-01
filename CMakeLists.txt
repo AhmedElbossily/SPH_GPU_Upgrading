@@ -3,14 +3,12 @@ cmake_minimum_required(VERSION 3.11.3)
 project(SPH LANGUAGES CUDA CXX)
 set(CMAKE_CUDA_STANDARD 17)
 
-set(CMAKE_CXX_COMPILER /usr/bin/g++-11)
-set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.8/bin/nvcc)
 
 # Enable CUDA language
 enable_language(CUDA)
 
 # Set CUDA architectures and flags
-set(CUDA_ARCHITECTURES "75")
+set(CUDA_ARCHITECTURES "90")
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}")
 
 # Enable separable compilation
