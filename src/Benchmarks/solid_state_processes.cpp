@@ -17,6 +17,87 @@
 
 #include "solid_state_processes.h"
 
+struct Point
+{
+	float_t x;
+	float_t y;
+	float_t z;
+};
+
+void generate_circular_arrangement(float_t n, float_t r, float_t z, std::vector<Point> &points)
+{
+
+	if (r == 0)
+	{
+		Point point;
+		point.x = r;
+		point.y = r;
+		point.z = z;
+		points.push_back(point);
+	}
+
+	for (int i = 0; i < n; i++)
+	{
+		double angle = 2 * M_PI * i / n;
+		Point point;
+		point.x = r * cos(angle);
+		point.y = r * sin(angle);
+		point.z = z;
+		points.push_back(point);
+	}
+}
+
+float_t distance(Point a, Point b)
+{
+
+	float deff_x = a.x - b.x;
+	float deff_y = a.y - b.y;
+	return sqrt(deff_x * deff_x + deff_y * deff_y);
+}
+
+void generate_circular_points(float_t diameter, float_t dz, float_t zz, std::vector<Point> &points)
+{
+	float_t r = 0.0;
+	while (r < diameter / 2.0)
+	{
+		int n = static_cast<int>((2 * M_PI * r) / dz);
+		generate_circular_arrangement(n, r, zz, points);
+		r += dz;
+	}
+}
+
+void generate_grid_points(int nx, int ny, float_t dz, float_t zz, std::vector<Point> &points)
+{
+	for (int i = 0; i < nx; ++i)
+	{
+		for (int j = 0; j < ny; ++j)
+		{
+			float_t x = -nx / 2.0 * dz + i * dz;
+			float_t y = -ny / 2.0 * dz + j * dz;
+			points.push_back(Point{x, y, zz});
+		}
+	}
+}
+
+float_t find_lowest_point_z(const std::vector<Point> &points)
+{
+	if (points.empty())
+	{
+		throw std::runtime_error("The points vector is empty.");
+	}
+
+	Point lowest_point = points[0];
+	for (const auto &point : points)
+	{
+		if (point.z < lowest_point.z)
+		{
+			lowest_point = point;
+		}
+	}
+
+	return lowest_point.z;
+}
+
 particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 {
 	phys_constants phys = make_phys_constants();
@@ -24,21 +105,43 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	trml_constants trml_wp = make_trml_constants();
 	joco_constants joco = make_joco_constants();
 
-	float_t vel_cylinders = 280 * 1000; // mm/s
-	float_t ri = 35;
-	float_t ro = 40;
-	float_t height = (ro - ri);
-	float_t spacing = ro + 1;
+	// Constants
+	constexpr float_t ms = 1.0;
+	constexpr float_t VsfM = 1.0;
+	constexpr float_t Vsf = 1.0;
+	constexpr float_t dz = 0.4;
+	constexpr float_t hdx = 1.3;
 
-	float_t dx = 2 * ro / (nbox - 1);
-	float_t hdx = 1.7;
+	// dimensions of the workpiece
+	constexpr float_t wp_width = 50.0;
+	constexpr float_t wp_length = 50.0;
+	constexpr float_t wp_thickness = 5.0 + 2. * dz;
+	constexpr float_t probe_diameter = 6.0;
+	constexpr float_t shoulder_inner_diameter = probe_diameter;
+	constexpr float_t shoulder_outer_diameter = 9.0;
+	constexpr float_t ring_inner_diameter = shoulder_outer_diameter;
+	constexpr float_t ring_outer_diameter = 17.0;
+	constexpr float_t probe_hight = 10.0;
+	constexpr float_t shoulder_hight = 10.0;
+	constexpr float_t ring_hight = 5.0;
+	constexpr float_t back_plate_diameter = ring_outer_diameter;
+	constexpr float_t back_plate_hight = 0.0;
+	constexpr float_t depth = 2.6;
+	int nx = static_cast<int>(wp_width / dz) + 1;
+	int ny = static_cast<int>(wp_length / dz) + 1;
 
+	// BC
+	constexpr float_t shoulder_plunging_speed = -1.25e-3 * Vsf;
+	constexpr float_t probe_plunging_speed = -1.25 * shoulder_plunging_speed; // 1.25 volume conservation
+	constexpr glm::vec3 w(0.0, 0.0, 2700 * 0.104719755 * Vsf);
+
+	// physical constants
 	phys.E = 71.7e9;
 	phys.nu = 0.33;
 	phys.rho0 = 2830.0 * 1.0e-6;
 	phys.G = phys.E / (2. * (1. + phys.nu));
 	phys.K = 2.0 * phys.G * (1 + phys.nu) / (3 * (1 - 2 * phys.nu));
-	phys.mass = dx * dx * dx * phys.rho0;
+	phys.mass = dz * dz * dz * phys.rho0;
 
 	// Johnson Cook Constants substrate
 	joco.A = 450.821e6; //	450.821 MPa
@@ -51,67 +154,55 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	joco.eps_dot_ref = 1;
 	joco.clamp_temp = 1.;
 
+	// Thermal Constants
 	trml_wp.cp = 860. * 1.0e6;							  // Heat Capacity
 	trml_wp.tq = 0.9;									  // Taylor-Quinney Coefficient
 	trml_wp.k = 153. * 1.0e6;							  // Thermal Conduction
 	trml_wp.alpha = trml_wp.k / (phys.rho0 * trml_wp.cp); // Thermal diffusivity
 	trml_wp.eta = 0.9;
 
+	// Corrector Constants
 	corr.alpha = 1.;
 	corr.beta = 1.;
 	corr.eta = 0.1;
 	corr.xspheps = 0.5;
-
 	corr.stresseps = 0.3;
-	{
-		float_t h1 = 1. / (hdx * dx);
-		float_t q = dx * h1;
-		float_t fac = (M_1_PI)*h1 * h1 * h1;
-		;
-		corr.wdeltap = fac * (1 - 1.5 * q * q * (1 - 0.5 * q));
-	}
+	float_t h1 = 1. / (hdx * dz);
+	float_t q = dz * h1;
+	float_t fac = (M_1_PI)*h1 * h1 * h1;
+	corr.wdeltap = fac * (1 - 1.5 * q * q * (1 - 0.5 * q));
 
-	int nheight = height / dx;
-
-	std::vector<float4_t> pos;
-	for (int i = 0; i < nbox; i++)
+	std::vector<Point> points;
+	float_t zz = 0;
+	while (zz < wp_thickness + shoulder_hight + back_plate_hight)
 	{
-		for (int j = 0; j < nbox; j++)
+		if (zz < back_plate_hight)
 		{
-			for (int k = 0; k < nheight; k++)
-			{
-				float_t px = -ro + i * dx;
-				float_t py = -ro + j * dx;
-				float_t pz = k * dx;
-				float_t dist = sqrt(px * px + py * py);
-				if (dist < ro && dist >= ri)
-				{
-					float4_t posl, posr;
-
-					posl.x = px - spacing;
-					posl.y = py;
-					posl.z = pz;
-
-					posr.x = px + spacing;
-					posr.y = py;
-					posr.z = pz;
-
-					pos.push_back(posl);
-					pos.push_back(posr);
-				}
-			}
+			generate_circular_points(back_plate_diameter, dz, zz, points);
 		}
+		else if (zz < back_plate_hight + wp_thickness)
+		{
+			generate_grid_points(nx, ny, dz, zz, points);
+		}
+		else if (zz < back_plate_hight + wp_thickness + ring_hight)
+		{
+			generate_circular_points(ring_outer_diameter, dz, zz, points);
+		}
+		else
+		{
+			generate_circular_points(shoulder_outer_diameter, dz, zz, points);
+		}
+		zz += dz;
 	}
 
-	int n = pos.size();
+	int n = points.size();
+	float_t lowest_point_z = find_lowest_point_z(points);
 
-	global_time_dt = 1e-7 * 0.3;
-	global_time_final = ro / vel_cylinders * 3;
-
-	*grid = new grid_gpu_green(n, make_float3_t(-200, -60, -60), make_float3_t(+200, +60, +60), hdx * dx);
+	*grid = new grid_gpu_green(n, make_float3_t(-26, -26, -1), make_float3_t(+26, +26, +30), hdx * dz);
 
 	printf("calculating with %d\n", n);
 
+	float4_t *pos = new float4_t[n];
 	float4_t *vel = new float4_t[n];
 	float_t *h = new float_t[n];
 	float_t *rho = new float_t[n];
@@ -121,14 +212,20 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 
 	for (int i = 0; i < n; i++)
 	{
+		pos[i] = {points[i].x, points[i].y, points[i].z, 0};
 		rho[i] = phys.rho0;
-		h[i] = hdx * dx;
-		vel[i].x = (pos[i].x < 0) ? vel_cylinders : -vel_cylinders;
+		h[i] = hdx * dz;
+		vel[i].x = 0;
 		vel[i].y = 0.;
 		vel[i].z = 0.;
 		T[i] = joco.Tref;
 		tool_p[i] = 0.0;
 		fixed[i] = 0.0;
+
+		if (pos[i].z == lowest_point_z)
+		{
+			fixed[i] = 1;
+		}
 	}
 
 	actions_setup_corrector_constants(corr);
@@ -141,12 +238,10 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	interactions_setup_geometry_constants(*grid);
 	interactions_setup_thermal_constants_workpiece(trml_wp);
 
-	float4_t *pos_f = new float4_t[n];
-	for (int i = 0; i < n; i++)
-	{
-		pos_f[i] = pos[i];
-	}
-	particle_gpu *particles = new particle_gpu(pos_f, vel, rho, T, h, fixed, tool_p, n);
+	particle_gpu *particles = new particle_gpu(pos, vel, rho, T, h, fixed, tool_p, n);
+
+	global_time_dt = 1.565015e-08;
+	global_time_final = 2.0;
 
 	assert(check_cuda_error());
 	return particles;

@@ -434,6 +434,8 @@ particle_gpu *setup_cylinder_impact(int nbox, grid_base **grid, bool use_art_str
 	global_time_dt = 1e-7 * 0.3;
 	global_time_final = ro / vel_cylinders * 3;
 
+	printf("global_time_final: %e\n", global_time_final);
+
 	*grid = new grid_gpu_green(n, make_float3_t(-200, -60, -60), make_float3_t(+200, +60, +60), hdx * dx);
 
 	printf("calculating with %d\n", n);
