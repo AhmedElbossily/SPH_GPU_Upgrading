@@ -200,6 +200,14 @@ void vtk_writer_write(particle_gpu *particles) {
 	}
 	fprintf(fp, "\n");
 
+	fprintf(fp, "SCALARS velocity float 1\n");		// Current particle velocity
+	fprintf(fp, "LOOKUP_TABLE default\n");
+	for (unsigned int i = 0; i < n; i++) {
+		if (h_blanked[i]==1.) continue;
+		fprintf(fp, "%f\n", glm::length(vec3_t(h_vel[i].x, h_vel[i].y, h_vel[i].z)));
+	}
+	fprintf(fp, "\n");
+
 	fprintf(fp, "SCALARS Temperature float 1\n");		// Current particle temperature
 	fprintf(fp, "LOOKUP_TABLE default\n");
 	for (unsigned int i = 0; i < n; i++) {

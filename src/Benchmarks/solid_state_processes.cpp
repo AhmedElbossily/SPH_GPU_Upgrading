@@ -66,6 +66,22 @@ void generate_circular_points(float_t diameter, float_t dz, float_t zz, std::vec
 	}
 }
 
+void generate_circular_points_hollow(float_t outer_diameter, float_t inner_diameter, float_t dz, float_t zz, std::vector<Point> &points)
+{
+	float_t r = 0.0;
+	while (r < outer_diameter / 2.0)
+	{
+		if (r < inner_diameter / 2.0)
+		{
+			r += dz;
+			continue;
+		}
+		int n = static_cast<int>((2 * M_PI * r) / dz);
+		generate_circular_arrangement(n, r, zz, points);
+		r += dz;
+	}
+}
+
 void generate_grid_points(int nx, int ny, float_t dz, float_t zz, std::vector<Point> &points)
 {
 	for (int i = 0; i < nx; ++i)
@@ -174,6 +190,28 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 
 	std::vector<Point> points;
 	float_t zz = 0;
+	/* 	while (zz < wp_thickness + shoulder_hight + back_plate_hight)
+		{
+			if (zz < back_plate_hight)
+			{
+				generate_circular_points(back_plate_diameter, dz, zz, points);
+			}
+			else if (zz < back_plate_hight + wp_thickness)
+			{
+				generate_grid_points(nx, ny, dz, zz, points);
+			}
+			else if (zz < back_plate_hight + wp_thickness + ring_hight)
+			{
+				generate_circular_points(ring_outer_diameter, dz, zz, points);
+			}
+			else
+			{
+				generate_circular_points(shoulder_outer_diameter, dz, zz, points);
+			}
+			zz += dz;
+		}
+	*/
+
 	while (zz < wp_thickness + shoulder_hight + back_plate_hight)
 	{
 		if (zz < back_plate_hight)
@@ -184,13 +222,9 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 		{
 			generate_grid_points(nx, ny, dz, zz, points);
 		}
-		else if (zz < back_plate_hight + wp_thickness + ring_hight)
-		{
-			generate_circular_points(ring_outer_diameter, dz, zz, points);
-		}
 		else
 		{
-			generate_circular_points(shoulder_outer_diameter, dz, zz, points);
+			generate_circular_points_hollow(shoulder_outer_diameter, shoulder_inner_diameter, dz, zz, points);
 		}
 		zz += dz;
 	}
@@ -226,6 +260,14 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 		{
 			fixed[i] = 1;
 		}
+
+		if (pos[i].z > back_plate_hight + wp_thickness)
+		{
+			glm::vec3 r(pos[i].x, pos[i].y, 0.0);
+			glm::vec3 v = glm::cross(w, r);
+			vel[i] = {v.x, v.y, 0.0};
+
+		}
 	}
 
 	actions_setup_corrector_constants(corr);
@@ -241,7 +283,7 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	particle_gpu *particles = new particle_gpu(pos, vel, rho, T, h, fixed, tool_p, n);
 
 	global_time_dt = 1.565015e-08;
-	global_time_final = 2.0;
+	global_time_final = 0.1;
 
 	assert(check_cuda_error());
 	return particles;
