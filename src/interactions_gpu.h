@@ -57,5 +57,7 @@ void interactions_setup_physical_constants(phys_constants phys);
 void interactions_setup_corrector_constants(corr_constants corr);
 void interactions_setup_thermal_constants_workpiece(trml_constants trml);
 void interactions_setup_thermal_constants_tool(trml_constants trml, tool_3d_gpu *tool);
+void interactions_setup_thermal_constants_tool(trml_constants trml_h);
+
 
 #endif /* INTERACTIONS_GPU_H_ */

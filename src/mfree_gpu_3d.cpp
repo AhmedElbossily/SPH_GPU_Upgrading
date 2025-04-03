@@ -43,11 +43,14 @@
 std::vector<tool_3d_gpu *> global_tool;
 tool_forces *global_tool_forces = 0;
 blanking *global_blanking = 0;
+float_t global_wz = 0;
 
 float_t global_time_dt = 0;
 float_t global_time_final = 0;
 float_t global_time_current = 0;
 int global_time_step = 0;
+float_t global_shoulder_velocity = 0;	
+float_t global_Vsf = 0;	
 
 int poll_temp()
 {

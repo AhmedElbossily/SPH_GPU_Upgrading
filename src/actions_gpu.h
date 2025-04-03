@@ -36,6 +36,9 @@ extern float_t global_time_dt;
 extern float_t global_time_final;
 extern float_t global_time_current;
 extern int global_time_step;
+extern float_t global_shoulder_velocity; 
+extern float_t global_Vsf;
+extern float_t global_wz;
 
 //equation of state for hydrostatic part of the stress (i.e. pressure)
 void material_eos(particle_gpu *particles);

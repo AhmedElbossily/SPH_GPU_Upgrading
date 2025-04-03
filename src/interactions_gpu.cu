@@ -427,7 +427,8 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 					float_t w_z = (ww.y * invB[0][2] + ww.z * invB[1][2] + ww.w * invB[2][2]);
 #endif
 
-					if (!(is_tool_particle_i == 1.) && !(is_tool_particle_j == 1.)) {
+					//if (!(is_tool_particle_i == 1.) && !(is_tool_particle_j == 1.)) {
+					if (!(is_tool_particle_i == 1.) ) {
 
 						//derive vel
 						vi_der[0][0] += (vj.x-vi.x)*w_x*volj;
@@ -641,6 +642,12 @@ void interactions_setup_thermal_constants_tool(trml_constants trml_h, tool_3d_gp
     printf("Diffusitvity tool: %e\n", trml_h.alpha);
 #endif
 
+    cudaMemcpyToSymbol(trml_tool, &trml_h, sizeof(trml_constants), 0, cudaMemcpyHostToDevice);
+    check_cuda_error("error copying thermal constants.\n");
+}
+
+void interactions_setup_thermal_constants_tool(trml_constants trml_h) {
+    thermals_tool = trml_h;
     cudaMemcpyToSymbol(trml_tool, &trml_h, sizeof(trml_constants), 0, cudaMemcpyHostToDevice);
     check_cuda_error("error copying thermal constants.\n");
 }

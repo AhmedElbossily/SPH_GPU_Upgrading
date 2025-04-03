@@ -37,6 +37,19 @@ __device__ __forceinline__ bool isnaninf(float_t val) {
 	return isnan(val) || isinf(val);
 }
 
+__device__ void updatePosition(float_t x, float_t y, float_t w, float_t t, float_t &x_new, float_t &y_new)
+{
+	// Convert angular velocity to radians per second
+	float_t omega = (w * 2 * M_PI) / 60.0;
+
+	// Calculate the angle of rotation
+	float_t theta = omega * t;
+
+	// Compute the new position
+	x_new = x * cos(theta) - y * sin(theta);
+	y_new = x * sin(theta) + y * cos(theta);
+}
+
 __global__ void do_material_eos(const float_t *__restrict__ blanked, const float_t *__restrict__ in_tool,
 		const float_t *__restrict__ rho, float_t *__restrict__ p, int N) {
 	unsigned int pidx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -368,7 +381,7 @@ __global__ void do_check_valid_full(particle_gpu particles) {
 	}
 }
 
-__global__ void do_plasticity_johnson_cook(particle_gpu particles, float_t dt) {
+__global__ void do_plasticity_johnson_cook(particle_gpu particles, float_t dt, float_t gVsf) {
 	unsigned int pidx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (pidx >= particles.N) return;
 	if (particles.blanked[pidx] == 1.) return;
@@ -418,7 +431,7 @@ __global__ void do_plasticity_johnson_cook(particle_gpu particles, float_t dt) {
 	}
 
 	float_t eps_pl_new = eps_pl + sqrtf(2.0/3.0) * fmaxf(delta_lambda,0.);
-	float_t eps_pl_dot_new = sqrtf(2.0/3.0) *  fmaxf(delta_lambda,0.) / dt;
+	float_t eps_pl_dot_new = (sqrtf(2.0/3.0) *  fmaxf(delta_lambda,0.) / dt)/gVsf;
 
 	particles.eps_pl[pidx] = eps_pl_new;
 	particles.eps_pl_dot[pidx] = eps_pl_dot_new;
@@ -461,11 +474,10 @@ __global__ void do_boundary_conditions_thermal(particle_gpu particles) {
 	}
 }
 
-__global__ void do_boundary_conditions(particle_gpu particles) {
+__global__ void do_boundary_conditions(particle_gpu particles, float_t dt, float_t gwz, float_t gshv) {
 	unsigned int pidx = blockIdx.x * blockDim.x + threadIdx.x;
 	if (pidx >= particles.N) return;
 	if (particles.blanked[pidx] == 1.) return;
-	if (particles.tool_particle[pidx] == 1.) return;
 
 	if (particles.fixed[pidx]) {
 		particles.vel[pidx].x = particles.vel_bc[pidx].x;
@@ -483,6 +495,24 @@ __global__ void do_boundary_conditions(particle_gpu particles) {
 		particles.vel_t[pidx].x = 0.;
 		particles.vel_t[pidx].y = 0.;
 		particles.vel_t[pidx].z = 0.;
+	}
+
+	if (particles.tool_particle[pidx] == 1.) {
+
+		float_t px;
+		float_t py;
+		updatePosition(particles.pos[pidx].x, particles.pos[pidx].y, gwz, dt, px, py);
+		particles.pos[pidx].x = px;
+		particles.pos[pidx].y = py;
+		particles.pos[pidx].z += gshv * dt;
+
+		glm::vec3 r(px, py, 0.0);
+		glm::vec3 w(0, 0, gwz);
+		glm::vec3 v = glm::cross(w, r);
+
+		particles.vel[pidx].x = v.x;
+		particles.vel[pidx].y = v.y;
+		particles.vel[pidx].z = gshv;
 	}
 }
 
@@ -596,7 +626,7 @@ void plasticity_johnson_cook(particle_gpu *particles) {
 	const unsigned int block_size = BLOCK_SIZE;
 	dim3 dG((particles->N + block_size-1) / block_size);
 	dim3 dB(block_size);
-	do_plasticity_johnson_cook<<<dG,dB>>>(*particles, global_time_dt);
+	do_plasticity_johnson_cook<<<dG,dB>>>(*particles, global_time_dt, global_Vsf);
 	check_cuda_error("After johnson_cook\n");
 }
 
@@ -613,7 +643,7 @@ void perform_boundary_conditions(particle_gpu *particles) {
 	const unsigned int block_size = BLOCK_SIZE;
 	dim3 dG((particles->N + block_size-1) / block_size);
 	dim3 dB(block_size);
-	do_boundary_conditions<<<dG,dB>>>(*particles);
+	do_boundary_conditions<<<dG,dB>>>(*particles, global_time_dt, global_wz, global_shoulder_velocity);
 	check_cuda_error("After boundary_conditions\n");
 }
 

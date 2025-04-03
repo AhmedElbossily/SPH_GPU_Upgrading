@@ -119,12 +119,12 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	phys_constants phys = make_phys_constants();
 	corr_constants corr = make_corr_constants();
 	trml_constants trml_wp = make_trml_constants();
+	trml_constants trml_tool = make_trml_constants();
 	joco_constants joco = make_joco_constants();
 
 	// Constants
 	constexpr float_t ms = 1.0;
-	constexpr float_t VsfM = 1.0;
-	constexpr float_t Vsf = 1.0;
+	global_Vsf= 10.0;
 	constexpr float_t dz = 0.4;
 	constexpr float_t hdx = 1.3;
 
@@ -147,14 +147,15 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	int ny = static_cast<int>(wp_length / dz) + 1;
 
 	// BC
-	constexpr float_t shoulder_plunging_speed = -1.25e-3 * Vsf;
-	constexpr float_t probe_plunging_speed = -1.25 * shoulder_plunging_speed; // 1.25 volume conservation
-	constexpr glm::vec3 w(0.0, 0.0, 2700 * 0.104719755 * Vsf);
+	global_shoulder_velocity = -1.25e-3 * global_Vsf;
+	float_t probe_plunging_speed = -1.25 * global_shoulder_velocity; // 1.25 volume conservation
+	global_wz = 2700 * 0.104719755 * global_Vsf;
+	glm::vec3 w(0.0, 0.0, global_wz);
 
 	// physical constants
 	phys.E = 71.7e9;
 	phys.nu = 0.33;
-	phys.rho0 = 2830.0 * 1.0e-6;
+	phys.rho0 = 2830.0 * 1.0e-6 * ms;
 	phys.G = phys.E / (2. * (1. + phys.nu));
 	phys.K = 2.0 * phys.G * (1 + phys.nu) / (3 * (1 - 2 * phys.nu));
 	phys.mass = dz * dz * dz * phys.rho0;
@@ -171,11 +172,19 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	joco.clamp_temp = 1.;
 
 	// Thermal Constants
-	trml_wp.cp = 860. * 1.0e6;							  // Heat Capacity
+	trml_wp.cp = (860. * 1.0e6) / ms;					  // Heat Capacity
 	trml_wp.tq = 0.9;									  // Taylor-Quinney Coefficient
-	trml_wp.k = 153. * 1.0e6;							  // Thermal Conduction
+	trml_wp.k = 153. * 1.0e6 * global_Vsf;						  // Thermal Conduction
 	trml_wp.alpha = trml_wp.k / (phys.rho0 * trml_wp.cp); // Thermal diffusivity
 	trml_wp.eta = 0.9;
+
+	// Thermal Constants steel
+	float_t steel_rho = 7850.0 * 1.0e-6 * ms;
+	trml_tool.cp = (560.0 * 1.0e6) / ms;						// Heat Capacity
+	trml_tool.tq = 0.9;											// Taylor-Quinney Coefficient
+	trml_tool.k = 33.0 * 1.0e6 * global_Vsf;							// Thermal Conduction
+	trml_tool.alpha = trml_tool.k / (phys.rho0 * trml_tool.cp); // Thermal diffusivity
+	trml_tool.eta = 0.9;
 
 	// Corrector Constants
 	corr.alpha = 1.;
@@ -267,23 +276,27 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 			glm::vec3 v = glm::cross(w, r);
 			vel[i] = {v.x, v.y, 0.0};
 
+			tool_p[i] = 1.0;
+			rho[i] = steel_rho;
 		}
 	}
 
 	actions_setup_corrector_constants(corr);
 	actions_setup_physical_constants(phys);
 	actions_setup_thermal_constants_wp(trml_wp);
+	actions_setup_thermal_constants_tool(trml_tool);
 	actions_setup_johnson_cook_constants(joco);
 
 	interactions_setup_corrector_constants(corr);
 	interactions_setup_physical_constants(phys);
 	interactions_setup_geometry_constants(*grid);
 	interactions_setup_thermal_constants_workpiece(trml_wp);
+	interactions_setup_thermal_constants_tool(trml_tool);
 
 	particle_gpu *particles = new particle_gpu(pos, vel, rho, T, h, fixed, tool_p, n);
 
 	global_time_dt = 1.565015e-08;
-	global_time_final = 0.1;
+	global_time_final = 0.0001;
 
 	assert(check_cuda_error());
 	return particles;

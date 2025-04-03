@@ -54,6 +54,9 @@ extern blanking *global_blanking;
 
 extern float_t global_time_dt;
 extern float_t global_time_final;
+extern float_t global_wz ;
+extern float_t global_shoulder_velocity;
+extern float_t global_Vsf;
 
 particle_gpu *setup_RFSSW(int nbox, grid_base **grid);  
 #endif /* SSP_H_ */
