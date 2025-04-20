@@ -150,7 +150,7 @@ void leap_frog::step(particle_gpu *particles, grid_base *g, bool record_forces) 
 	material_eos(particles);
 	corrector_artificial_stress(particles);
 
-	interactions_setup_geometry_constants(g);
+	interactions_setup_geometry_constants(g); 
 	interactions_monaghan(particles, cell_start, cell_end, g->num_cell());
 
 #ifdef Thermal_Conduction_PSE
@@ -160,7 +160,7 @@ void leap_frog::step(particle_gpu *particles, grid_base *g, bool record_forces) 
 	material_stress_rate_jaumann(particles);
 	contmech_continuity(particles);
 	contmech_momentum(particles);
-	contmech_advection(particles);
+	contmech_advection(particles); 
 
 #ifndef NDEBUG
 	debug_invalidate(particles);
@@ -182,10 +182,10 @@ void leap_frog::step(particle_gpu *particles, grid_base *g, bool record_forces) 
 	}
 	material_fric_heat_gen(particles, global_tool[0]->get_vel());
 
-	perform_boundary_conditions(particles);
+	perform_boundary_conditions(particles); 
 	//perform_boundary_conditions_thermal(particles);
 
-	actions_move_tool_particles(particles, global_tool[0]);
+	//actions_move_tool_particles(particles, global_tool[0]);
 
 #ifndef NDEBUG
 	debug_check_valid_full(particles);

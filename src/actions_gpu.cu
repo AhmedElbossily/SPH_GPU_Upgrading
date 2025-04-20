@@ -318,28 +318,70 @@ __global__ void do_invalidate_rate(particle_gpu particles) {
 
 	bool invalid = false;
 
-	invalid = invalid || isnaninf(particles.pos_t[pidx].x);
-	invalid = invalid || isnaninf(particles.pos_t[pidx].y);
-	invalid = invalid || isnaninf(particles.pos_t[pidx].z);
+	if (isnaninf(particles.pos_t[pidx].x)) {
+		invalid = true;
+		printf("Particle %d: invalid pos_t.x\n", pidx);
+	}
+	if (isnaninf(particles.pos_t[pidx].y)) {
+		invalid = true;
+		printf("Particle %d: invalid pos_t.y\n", pidx);
+	}
+	if (isnaninf(particles.pos_t[pidx].z)) {
+		invalid = true;
+		printf("Particle %d: invalid pos_t.z\n", pidx);
+	}
 
-	invalid = invalid || isnaninf(particles.vel_t[pidx].x);
-	invalid = invalid || isnaninf(particles.vel_t[pidx].y);
-	invalid = invalid || isnaninf(particles.vel_t[pidx].z);
+	if (isnaninf(particles.vel_t[pidx].x)) {
+		invalid = true;
+		printf("Particle %d: invalid vel_t.x\n", pidx);
+	}
+	if (isnaninf(particles.vel_t[pidx].y)) {
+		invalid = true;
+		printf("Particle %d: invalid vel_t.y\n", pidx);
+	}
+	if (isnaninf(particles.vel_t[pidx].z)) {
+		invalid = true;
+		printf("Particle %d: invalid vel_t.z\n", pidx);
+	}
 
-	invalid = invalid || isnaninf(particles.S_t[pidx][0][0]);
-	invalid = invalid || isnaninf(particles.S_t[pidx][1][1]);
-	invalid = invalid || isnaninf(particles.S_t[pidx][2][2]);
+	if (isnaninf(particles.S_t[pidx][0][0])) {
+		invalid = true;
+		printf("Particle %d: invalid S_t[0][0]\n", pidx);
+	}
+	if (isnaninf(particles.S_t[pidx][1][1])) {
+		invalid = true;
+		printf("Particle %d: invalid S_t[1][1]\n", pidx);
+	}
+	if (isnaninf(particles.S_t[pidx][2][2])) {
+		invalid = true;
+		printf("Particle %d: invalid S_t[2][2]\n", pidx);
+	}
 
-	invalid = invalid || isnaninf(particles.S_t[pidx][0][1]);
-	invalid = invalid || isnaninf(particles.S_t[pidx][1][2]);
-	invalid = invalid || isnaninf(particles.S_t[pidx][2][0]);
+	if (isnaninf(particles.S_t[pidx][0][1])) {
+		invalid = true;
+		printf("Particle %d: invalid S_t[0][1]\n", pidx);
+	}
+	if (isnaninf(particles.S_t[pidx][1][2])) {
+		invalid = true;
+		printf("Particle %d: invalid S_t[1][2]\n", pidx);
+	}
+	if (isnaninf(particles.S_t[pidx][2][0])) {
+		invalid = true;
+		printf("Particle %d: invalid S_t[2][0]\n", pidx);
+	}
 
-	invalid = invalid || isnaninf(particles.rho_t[pidx]);
-	invalid = invalid || isnaninf(particles.T_t[pidx]);
+	if (isnaninf(particles.rho_t[pidx])) {
+		invalid = true;
+		printf("Particle %d: invalid rho_t\n", pidx);
+	}
+	if (isnaninf(particles.T_t[pidx])) {
+		invalid = true;
+		printf("Particle %d: invalid T_t\n", pidx);
+	}
 
 	if (invalid) {
 		particles.blanked[pidx] = 1.;
-		printf("invalidated particle %d due to nan!\n", pidx);
+		printf("Invalidated particle %d due to nan or inf values.\n", pidx);
 	}
 }
 

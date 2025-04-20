@@ -52,25 +52,29 @@ cudaTextureObject_t cells_start_tex;
 cudaTextureObject_t cells_end_tex;
 
 #ifdef USE_DOUBLE
-static __inline__ __device__ double fetch_double(cudaTextureObject_t t, int i) {
+template <typename T>
+__inline__ __device__ T fetch_double(cudaTextureObject_t t, int i) {
     int2 v = tex1Dfetch<int2>(t, i);
     return __hiloint2double(v.y, v.x);
 }
 
-static __inline__ __device__ double2 fetch_double(cudaTextureObject_t t, int i) {
-    int4 v = tex1Dfetch<int4>(t, i);
-    return make_double2(__hiloint2double(v.y, v.x), __hiloint2double(v.w, v.z));
+static __inline__ __device__ double2 fetch_double(texture<int4, 1> t, int i) {
+	int4 v = tex1Dfetch(t,i);
+	return make_double2(__hiloint2double(v.y, v.x), __hiloint2double(v.w, v.z));
 }
-
-static __inline__ __device__ double4 fetch_double2(cudaTextureObject_t t, int i) {
+template <typename T>
+__inline__ __device__ T fetch_double2(cudaTextureObject_t t, int i) {
     int4 v1 = tex1Dfetch<int4>(t, 2 * i + 0);
     int4 v2 = tex1Dfetch<int4>(t, 2 * i + 1);
 
-    return make_double4(__hiloint2double(v1.y, v1.x), __hiloint2double(v1.w, v1.z),
-                        __hiloint2double(v2.y, v2.x), __hiloint2double(v2.w, v2.z));
+    return make_double4(
+        __hiloint2double(v1.y, v1.x),
+        __hiloint2double(v1.w, v1.z),
+        __hiloint2double(v2.y, v2.x),
+        __hiloint2double(v2.w, v2.z)
+    );
 }
 #endif
-
 __device__ __forceinline__ void hash(int i, int j, int k, int &idx) {
     idx = i * geometry.ny * geometry.nz + j * geometry.nz + k;
 }
@@ -81,7 +85,7 @@ __device__ __forceinline__ void unhash(int &i, int &j, int &k, int idx) {
     k = idx % geometry.nz;
 }
 
-void setup_texture_objects(particle_gpu *particles,  int *cells_start,  int *cells_end, int num_cell) {
+void setup_texture_objects(particle_gpu *particles, int *cells_start, int *cells_end, int num_cell) {
     cudaResourceDesc resDesc = {};
     cudaTextureDesc texDesc = {};
     texDesc.readMode = cudaReadModeElementType;
@@ -90,43 +94,71 @@ void setup_texture_objects(particle_gpu *particles,  int *cells_start,  int *cel
     resDesc.resType = cudaResourceTypeLinear;
     resDesc.res.linear.devPtr = particles->pos;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N * 4;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int4>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float4>();
+#endif
     cudaCreateTextureObject(&pos_tex, &resDesc, &texDesc, nullptr);
 
     // Setup vel_tex
     resDesc.res.linear.devPtr = particles->vel;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N * 4;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int4>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float4>();
+#endif
     cudaCreateTextureObject(&vel_tex, &resDesc, &texDesc, nullptr);
 
     // Setup h_tex
     resDesc.res.linear.devPtr = particles->h;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int2>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float>();
+#endif
     cudaCreateTextureObject(&h_tex, &resDesc, &texDesc, nullptr);
 
     // Setup rho_tex
     resDesc.res.linear.devPtr = particles->rho;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int2>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float>();
+#endif
     cudaCreateTextureObject(&rho_tex, &resDesc, &texDesc, nullptr);
 
     // Setup p_tex
     resDesc.res.linear.devPtr = particles->p;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int2>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float>();
+#endif
     cudaCreateTextureObject(&p_tex, &resDesc, &texDesc, nullptr);
 
     // Setup T_tex
     resDesc.res.linear.devPtr = particles->T;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int2>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float>();
+#endif
     cudaCreateTextureObject(&T_tex, &resDesc, &texDesc, nullptr);
 
     // Setup tool_particle_tex
     resDesc.res.linear.devPtr = particles->tool_particle;
     resDesc.res.linear.sizeInBytes = sizeof(float_t) * particles->N;
+#ifdef USE_DOUBLE
+    resDesc.res.linear.desc = cudaCreateChannelDesc<int2>();
+#else
     resDesc.res.linear.desc = cudaCreateChannelDesc<float>();
+#endif
     cudaCreateTextureObject(&tool_particle_tex, &resDesc, &texDesc, nullptr);
 
     // Setup hashes_tex
@@ -177,11 +209,11 @@ __global__ void do_interactions_heat(cudaTextureObject_t pos_tex, cudaTextureObj
     float_t mass = physics.mass;
 
     //load particle data at pidx
-    float4_t pi = tex1Dfetch<float4_t>(pos_tex, pidx);
-    float_t hi = tex1Dfetch<float_t>(h_tex, pidx);
-    float_t Ti = tex1Dfetch<float_t>(T_tex, pidx);
+    float4_t pi = texfetch4<float4_t>(pos_tex, pidx);
+    float_t hi = texfetch1<float_t>(h_tex, pidx);
+    float_t Ti = texfetch1<float_t>(T_tex, pidx);
 
-    float_t is_tool_particle = tex1Dfetch<float_t>(tool_particle_tex, pidx);
+    float_t is_tool_particle = texfetch1<float_t>(tool_particle_tex, pidx);
     float_t alpha = (is_tool_particle == 1.) ? alpha_tool : alpha_wp;
 
     //unhash and look for neighbor boxes
@@ -211,9 +243,9 @@ __global__ void do_interactions_heat(cudaTextureObject_t pos_tex, cudaTextureObj
                 if (c_start == 0xffffffff) continue;
 
                 for (int iter = c_start; iter < c_end; iter++) {
-                    float4_t pj = tex1Dfetch<float4_t>(pos_tex, iter);
-                    float_t Tj = tex1Dfetch<float_t>(T_tex, iter);
-                    float_t rhoj = tex1Dfetch<float_t>(rho_tex, iter);
+                    float4_t pj = texfetch4<float4_t>(pos_tex, iter);
+                    float_t Tj = texfetch1<float_t>(T_tex, iter);
+                    float_t rhoj = texfetch1<float_t>(rho_tex, iter);
 
                     float_t w2_pse = lapl_pse(pi, pj, hi); // Laplacian by PSE-method
 
@@ -237,7 +269,7 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 	if (pidx >= N) return;
 	if (blanked[pidx] == 1.) return;
 
-	float_t is_tool_particle_i =  tex1Dfetch<float_t>(tool_particle_tex, pidx);
+	float_t is_tool_particle_i =  texfetch1<float_t>(tool_particle_tex, pidx);
 
 	//load physical constants
 	float_t mass = physics.mass;
@@ -259,20 +291,22 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 	int nz = geometry.nz;
 
 	//load particle data at pidx
-	float4_t pi   = tex1Dfetch<float4_t>(pos_tex, pidx);
-	float4_t vi   = tex1Dfetch<float4_t>(vel_tex, pidx);
+	float4_t pi   = texfetch4<float4_t>(pos_tex, pidx);
+	float4_t vi   = texfetch4<float4_t>(vel_tex, pidx);
 
 	mat3x3_t Si   = S[pidx];
 	mat3x3_t Ri   = R[pidx];
-	float_t  hi   = tex1Dfetch<float_t>(h_tex,pidx);
-	float_t  rhoi = tex1Dfetch<float_t>(rho_tex,pidx);
-	float_t  prsi = tex1Dfetch<float_t>(p_tex,pidx);
+	float_t  hi   = texfetch1<float_t>(h_tex,pidx);
+	float_t  rhoi = texfetch1<float_t>(rho_tex,pidx);
+	float_t  prsi = texfetch1<float_t>(p_tex,pidx);
+
+	//printf("pidx: %d, rho: %f, h: %f\n", pidx, rhoi, hi);
 
 #ifdef Thermal_Conduction_Brookshaw
 	float_t Ti = 0.;
 	// particle_i temperature
 	if (thermal_alpha != 0.) {
-		Ti = tex1Dfetch<float_t>(T_tex,pidx);
+		Ti = texfetch1<float_t>(T_tex,pidx);
 	}
 #endif
 
@@ -317,7 +351,7 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 
 					// iterate over particles contained in a neighboring box
 					int c_start = tex1Dfetch<int>(cells_start_tex, idx);
-					int c_end   = tex1Dfetch<in>t(cells_end_tex,   idx);
+					int c_end   = ttex1Dfetch<int>(cells_end_tex,   idx);
 
 					if (c_start ==  0xffffffff) continue;
 
@@ -327,13 +361,13 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 							continue;
 						}
 
-						float_t is_tool_particle_j = tex1Dfetch<float_t>(tool_particle_tex,iter);
+						float_t is_tool_particle_j = texfetch1<float_t>(tool_particle_tex,iter);
 						if (is_tool_particle_j == 1.) {
 							continue;
 						}
 
-						float4_t pj   = tex1Dfetch<float4_t>(pos_tex,iter);
-						float_t  rhoj = tex1Dfetch<float_t>(rho_tex,iter);
+						float4_t pj   = texfetch4<float4_t>(pos_tex,iter);
+						float_t  rhoj = texfetch1<float_t>(rho_tex,iter);
 
 						const float_t volj = mass/rhoj;
 
@@ -392,21 +426,21 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 						continue;
 					}
 					//load vars at neighbor particle
-					float4_t pj   = tex1Dfetch<float4_t>(pos_tex,iter);
-					float4_t vj   = tex1Dfetch<float4_t>(vel_tex,iter);
+					float4_t pj   = texfetch4<float4_t>(pos_tex,iter);
+					float4_t vj   = texfetch4<float4_t>(vel_tex,iter);
 
 					mat3x3_t Sj   = S[iter];
 					mat3x3_t Rj   = R[iter];
-					float_t  hj   = tex1Dfetch<float_t>(h_tex,iter);
-					float_t  rhoj = tex1Dfetch<float_t>(rho_tex,iter);
-					float_t  prsj = tex1Dfetch<float_t>(p_tex,iter);
+					float_t  hj   = texfetch1<float_t>(h_tex,iter);
+					float_t  rhoj = texfetch1<float_t>(rho_tex,iter);
+					float_t  prsj = texfetch1<float_t>(p_tex,iter);
 #ifdef Thermal_Conduction_Brookshaw
 					float_t Tj = 0.;
 					if (thermal_alpha != 0.) {
-						Tj = tex1Dfetch<float_t>(T_tex,iter);
+						Tj = texfetch1<float_t>(T_tex,iter);
 					}
 #endif
-					float_t is_tool_particle_j = tex1Dfetch<float_t>(tool_particle_tex,iter);
+					float_t is_tool_particle_j = texfetch1<float_t>(tool_particle_tex,iter);
 
 					float_t volj   = mass/rhoj;
 					float_t rhoj21 = 1./(rhoj*rhoj);
@@ -515,7 +549,7 @@ __global__ void do_interactions_monaghan(cudaTextureObject_t pos_tex, cudaTextur
 #ifdef Thermal_Conduction_Brookshaw
 					//thermal, 3D Brookshaw
 					if (thermal_alpha != 0.) {
-						float4_t pj   = tex1Dfetch<float4_t>(pos_tex,iter);
+						float4_t pj   = texfetch4<float4_t>(pos_tex,iter);
 						float_t xij = pi.x - pj.x;
 						float_t yij = pi.y - pj.y;
 						float_t zij = pi.z - pj.z;

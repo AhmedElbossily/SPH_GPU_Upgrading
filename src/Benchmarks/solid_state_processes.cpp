@@ -147,10 +147,10 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	int ny = static_cast<int>(wp_length / dz) + 1;
 
 	// BC
-	global_shoulder_velocity = -1.25e-3 * global_Vsf;
+ 	global_shoulder_velocity = -1.25e-3 * global_Vsf;
 	float_t probe_plunging_speed = -1.25 * global_shoulder_velocity; // 1.25 volume conservation
 	global_wz = 2700 * 0.104719755 * global_Vsf;
-	glm::vec3 w(0.0, 0.0, global_wz);
+	glm::vec3 w(0.0, 0.0, global_wz); 
 
 	// physical constants
 	phys.E = 71.7e9;
@@ -241,7 +241,7 @@ particle_gpu *setup_RFSSW(int nbox, grid_base **grid)
 	int n = points.size();
 	float_t lowest_point_z = find_lowest_point_z(points);
 
-	*grid = new grid_gpu_green(n, make_float3_t(-26, -26, -1), make_float3_t(+26, +26, +30), hdx * dz);
+	*grid = new grid_gpu_green(n, make_float3_t(-26., -26., -1.), make_float3_t(+26., +26., +30.), hdx * dz);
 
 	printf("calculating with %d\n", n);
 

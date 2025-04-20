@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 	//	particle_gpu *particles = setup_solid_ball_plastic_wall_impact(10, &grid);
 	//	particle_gpu *particles = setup_plastic_ball_plastic_wall_impact(10, &grid);
 
-	//	particle_gpu *particles = setup_cylinder_impact(80, &grid, true);
+	//particle_gpu *particles = setup_cylinder_impact(80, &grid, true);
 	particle_gpu *particles = setup_RFSSW(80, &grid);
 
 	// single and multigrain studies

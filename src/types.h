@@ -29,7 +29,7 @@
 
 #include <glm/glm.hpp>
 
-//#define USE_DOUBLE
+#define USE_DOUBLE
 
 #ifdef USE_DOUBLE
 //built in vector types
